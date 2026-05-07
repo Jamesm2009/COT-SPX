@@ -5,7 +5,6 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-// 52-week rolling z-score
 function calculateZScore(values, index, windowSize = 52) {
   if (index < windowSize) return null;
   const window = values.slice(index - windowSize, index);
@@ -15,7 +14,6 @@ function calculateZScore(values, index, windowSize = 52) {
   return std === 0 ? 0 : (values[index] - mean) / std;
 }
 
-// Find nearest SPY price within 4 days of a COT date
 function nearestSPY(targetDate, spyMap) {
   const target = new Date(targetDate).getTime();
   const fourDays = 4 * 24 * 60 * 60 * 1000;
@@ -32,7 +30,6 @@ function nearestSPY(targetDate, spyMap) {
 }
 
 export async function GET(request) {
-  // Allow Vercel cron (Authorization header) or manual trigger via ?secret=
   const authHeader = request.headers.get('authorization');
   const querySecret = new URL(request.url).searchParams.get('secret');
   const authorized =
@@ -44,23 +41,43 @@ export async function GET(request) {
   }
 
   try {
-    // ── 1. Fetch COT data from CFTC (4 years for z-score window) ──────────────
-    // Non-Commercial (Managed Money proxy) for E-mini S&P 500 (CME code 13874+)
+    // ── 1. Fetch COT data using $where syntax (more reliable than $query) ────
+    // Using the Legacy Combined dataset (jun7-fc8e)
+    // Contract code 13874+ is the CME S&P 500 Consolidated (e-mini + standard + micro)
     const cotUrl =
       `https://publicreporting.cftc.gov/resource/jun7-fc8e.json` +
-      `?$query=SELECT report_date_as_yyyy_mm_dd,` +
-      `noncomm_positions_long_all,noncomm_positions_short_all,open_interest_all` +
-      ` WHERE cftc_contract_market_code='13874%2B'
-      ` AND report_date_as_yyyy_mm_dd>='2021-01-01'` +
-      ` ORDER BY report_date_as_yyyy_mm_dd ASC LIMIT 400`;
+      `?$where=cftc_contract_market_code=%2713874%2B%27` +
+      `%20AND%20report_date_as_yyyy_mm_dd%20%3E=%20%272021-01-01%27` +
+      `&$order=report_date_as_yyyy_mm_dd%20ASC` +
+      `&$limit=400` +
+      `&$select=report_date_as_yyyy_mm_dd,noncomm_positions_long_all,noncomm_positions_short_all,open_interest_all`;
 
-    const cotRes = await fetch(cotUrl, { next: { revalidate: 0 } });
+    console.log('[cron] Fetching COT data from:', cotUrl);
+    const cotRes = await fetch(cotUrl, { cache: 'no-store' });
     if (!cotRes.ok) throw new Error(`CFTC API error: ${cotRes.status}`);
     const cotRaw = await cotRes.json();
+    console.log('[cron] COT rows returned:', cotRaw.length);
 
-    if (!cotRaw.length) throw new Error('No COT data returned — check contract code');
+    if (!cotRaw.length) {
+      // Try fallback with market_and_exchange_names
+      const fallbackUrl =
+        `https://publicreporting.cftc.gov/resource/jun7-fc8e.json` +
+        `?$where=market_and_exchange_names%20like%20%27%25S%26P%20500%20STOCK%25%27` +
+        `%20AND%20report_date_as_yyyy_mm_dd%20%3E=%20%272021-01-01%27` +
+        `&$order=report_date_as_yyyy_mm_dd%20ASC` +
+        `&$limit=400` +
+        `&$select=report_date_as_yyyy_mm_dd,noncomm_positions_long_all,noncomm_positions_short_all,open_interest_all,market_and_exchange_names,cftc_contract_market_code`;
 
-    // ── 2. Fetch SPY weekly prices from Yahoo Finance ─────────────────────────
+      console.log('[cron] Trying fallback URL:', fallbackUrl);
+      const fallbackRes = await fetch(fallbackUrl, { cache: 'no-store' });
+      const fallbackData = await fallbackRes.json();
+      console.log('[cron] Fallback rows:', fallbackData.length);
+      console.log('[cron] Fallback sample:', JSON.stringify(fallbackData.slice(0, 2)));
+
+      throw new Error(`No COT data returned. Fallback found ${fallbackData.length} rows. Sample: ${JSON.stringify(fallbackData.slice(0,1))}`);
+    }
+
+    // ── 2. Fetch SPY weekly prices ────────────────────────────────────────────
     const endTs = Math.floor(Date.now() / 1000);
     const startTs = endTs - 4 * 365 * 24 * 60 * 60;
     const spyUrl =
@@ -69,17 +86,15 @@ export async function GET(request) {
 
     const spyRes = await fetch(spyUrl, {
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
         Accept: 'application/json',
       },
-      next: { revalidate: 0 },
+      cache: 'no-store',
     });
     if (!spyRes.ok) throw new Error(`Yahoo Finance error: ${spyRes.status}`);
     const spyJson = await spyRes.json();
     const spyResult = spyJson.chart.result[0];
 
-    // Build date → price lookup
     const spyMap = {};
     spyResult.timestamp.forEach((ts, i) => {
       const price = spyResult.indicators.quote[0].close[i];
@@ -89,7 +104,7 @@ export async function GET(request) {
       }
     });
 
-    // ── 3. Process COT → net position as % of open interest ──────────────────
+    // ── 3. Process COT ────────────────────────────────────────────────────────
     const cotProcessed = cotRaw
       .map((row) => {
         const longs = parseFloat(row.noncomm_positions_long_all ?? 0);
@@ -102,14 +117,14 @@ export async function GET(request) {
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // ── 4. Calculate 52-week rolling z-score ──────────────────────────────────
+    // ── 4. Z-score ────────────────────────────────────────────────────────────
     const netPcts = cotProcessed.map((d) => d.netPositionPct);
     const withZ = cotProcessed.map((row, i) => ({
       ...row,
       zScore: calculateZScore(netPcts, i, 52),
     }));
 
-    // ── 5. Filter to last 3 years + match SPY prices ──────────────────────────
+    // ── 5. Filter to 3 years + match SPY ─────────────────────────────────────
     const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear() - 3);
 
@@ -125,7 +140,7 @@ export async function GET(request) {
 
     if (!finalData.length) throw new Error('No matched data after alignment');
 
-    // ── 6. Store in Upstash Redis ─────────────────────────────────────────────
+    // ── 6. Store in Upstash ───────────────────────────────────────────────────
     const payload = {
       updatedAt: new Date().toISOString(),
       rows: finalData.length,
