@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import CTAChart from './components/CTAChart';
+import CTAChart from '@/app/components/CTAChart';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
