@@ -1,0 +1,27 @@
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.https://native-redbird-117525.upstash.io,
+  token: process.env.gQAAAAAAAcsVAAIgcDJlOTBiNmUxNWFmODA0Y2RhOWFmZWZlM2VjN2Q5Njg3NQ,
+});
+
+export async function GET() {
+  try {
+    const cached = await redis.get('cta_tracker_data');
+
+    if (!cached) {
+      return Response.json(
+        {
+          error: 'No data in database yet.',
+          hint: 'Seed the database by visiting /api/cron?secret=ThisIsMy0wnW0rk!!!',
+        },
+        { status: 404 }
+      );
+    }
+
+    const payload = typeof cached === 'string' ? JSON.parse(cached) : cached;
+    return Response.json(payload);
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+}
