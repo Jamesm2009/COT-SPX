@@ -50,7 +50,7 @@ export async function GET(request) {
       `https://publicreporting.cftc.gov/resource/jun7-fc8e.json` +
       `?$query=SELECT report_date_as_yyyy_mm_dd,` +
       `noncomm_positions_long_all,noncomm_positions_short_all,open_interest_all` +
-      ` WHERE cftc_contract_market_code='13874+'` +
+      ` WHERE cftc_contract_market_code='13874%2B'
       ` AND report_date_as_yyyy_mm_dd>='2021-01-01'` +
       ` ORDER BY report_date_as_yyyy_mm_dd ASC LIMIT 400`;
 
