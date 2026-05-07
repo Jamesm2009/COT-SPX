@@ -98,7 +98,7 @@ export default function Home() {
             <ComposedChart data={chartData} margin={{top:8,right:50,left:0,bottom:4}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
               <XAxis dataKey="date" stroke="#374151" tick={{fill:'#6b7280',fontSize:11}} tickFormatter={formatDate} minTickGap={50} />
-              <YAxis yAxisId="spy" orientation="left" stroke="#22d3ee" tick={{fill:'#22d3ee',fontSize:11}} tickFormatter={v => `$${v}`} width={56} />
+           <YAxis yAxisId="spy" orientation="left" stroke="#22d3ee" tick={{fill:'#22d3ee',fontSize:11}} tickFormatter={v => `$${v}`} width={56} domain={['auto', 'auto']} />
               <YAxis yAxisId="z" orientation="right" stroke="#f97316" tick={{fill:'#f97316',fontSize:11}} tickFormatter={v => `${v>0?'+':''}${v.toFixed(1)}σ`} domain={[-3.5,3.5]} width={50} />
               <Tooltip />
               <ReferenceLine yAxisId="z" y={2} stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5} label={{value:'+2σ',position:'right',fill:'#ef4444',fontSize:11}} />
