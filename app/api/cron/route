@@ -1,8 +1,8 @@
 import { Redis } from '@upstash/redis';
 
 const redis = new Redis({
-  url: process.env.https://native-redbird-117525.upstash.io,
-  token: process.env.gQAAAAAAAcsVAAIgcDJlOTBiNmUxNWFmODA0Y2RhOWFmZWZlM2VjN2Q5Njg3NQ,
+  url: process.env.UPSTASH_REDIS_REST_URL,
+token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
 // 52-week rolling z-score
