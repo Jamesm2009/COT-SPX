@@ -1,0 +1,141 @@
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.https://native-redbird-117525.upstash.io,
+  token: process.env.gQAAAAAAAcsVAAIgcDJlOTBiNmUxNWFmODA0Y2RhOWFmZWZlM2VjN2Q5Njg3NQ,
+});
+
+// 52-week rolling z-score
+function calculateZScore(values, index, windowSize = 52) {
+  if (index < windowSize) return null;
+  const window = values.slice(index - windowSize, index);
+  const mean = window.reduce((s, v) => s + v, 0) / window.length;
+  const variance = window.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / window.length;
+  const std = Math.sqrt(variance);
+  return std === 0 ? 0 : (values[index] - mean) / std;
+}
+
+// Find nearest SPY price within 4 days of a COT date
+function nearestSPY(targetDate, spyMap) {
+  const target = new Date(targetDate).getTime();
+  const fourDays = 4 * 24 * 60 * 60 * 1000;
+  let best = null;
+  let bestDiff = Infinity;
+  for (const [date, price] of Object.entries(spyMap)) {
+    const diff = Math.abs(new Date(date).getTime() - target);
+    if (diff < bestDiff && diff <= fourDays) {
+      bestDiff = diff;
+      best = price;
+    }
+  }
+  return best;
+}
+
+export async function GET(request) {
+  // Allow Vercel cron (Authorization header) or manual trigger via ?secret=
+  const authHeader = request.headers.get('authorization');
+  const querySecret = new URL(request.url).searchParams.get('secret');
+  const authorized =
+    authHeader === `Bearer ${process.env.CRON_SECRET}` ||
+    querySecret === process.env.CRON_SECRET;
+
+  if (!authorized) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    // ── 1. Fetch COT data from CFTC (4 years for z-score window) ──────────────
+    // Non-Commercial (Managed Money proxy) for E-mini S&P 500 (CME code 13874+)
+    const cotUrl =
+      `https://publicreporting.cftc.gov/resource/jun7-fc8e.json` +
+      `?$query=SELECT report_date_as_yyyy_mm_dd,` +
+      `noncomm_positions_long_all,noncomm_positions_short_all,open_interest_all` +
+      ` WHERE cftc_contract_market_code='13874+'` +
+      ` AND report_date_as_yyyy_mm_dd>='2021-01-01'` +
+      ` ORDER BY report_date_as_yyyy_mm_dd ASC LIMIT 400`;
+
+    const cotRes = await fetch(cotUrl, { next: { revalidate: 0 } });
+    if (!cotRes.ok) throw new Error(`CFTC API error: ${cotRes.status}`);
+    const cotRaw = await cotRes.json();
+
+    if (!cotRaw.length) throw new Error('No COT data returned — check contract code');
+
+    // ── 2. Fetch SPY weekly prices from Yahoo Finance ─────────────────────────
+    const endTs = Math.floor(Date.now() / 1000);
+    const startTs = endTs - 4 * 365 * 24 * 60 * 60;
+    const spyUrl =
+      `https://query1.finance.yahoo.com/v8/finance/chart/SPY` +
+      `?period1=${startTs}&period2=${endTs}&interval=1wk`;
+
+    const spyRes = await fetch(spyUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        Accept: 'application/json',
+      },
+      next: { revalidate: 0 },
+    });
+    if (!spyRes.ok) throw new Error(`Yahoo Finance error: ${spyRes.status}`);
+    const spyJson = await spyRes.json();
+    const spyResult = spyJson.chart.result[0];
+
+    // Build date → price lookup
+    const spyMap = {};
+    spyResult.timestamp.forEach((ts, i) => {
+      const price = spyResult.indicators.quote[0].close[i];
+      if (price) {
+        const date = new Date(ts * 1000).toISOString().split('T')[0];
+        spyMap[date] = price;
+      }
+    });
+
+    // ── 3. Process COT → net position as % of open interest ──────────────────
+    const cotProcessed = cotRaw
+      .map((row) => {
+        const longs = parseFloat(row.noncomm_positions_long_all ?? 0);
+        const shorts = parseFloat(row.noncomm_positions_short_all ?? 0);
+        const oi = parseFloat(row.open_interest_all ?? 1);
+        return {
+          date: row.report_date_as_yyyy_mm_dd,
+          netPositionPct: ((longs - shorts) / oi) * 100,
+        };
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // ── 4. Calculate 52-week rolling z-score ──────────────────────────────────
+    const netPcts = cotProcessed.map((d) => d.netPositionPct);
+    const withZ = cotProcessed.map((row, i) => ({
+      ...row,
+      zScore: calculateZScore(netPcts, i, 52),
+    }));
+
+    // ── 5. Filter to last 3 years + match SPY prices ──────────────────────────
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 3);
+
+    const finalData = withZ
+      .filter((row) => row.zScore !== null && new Date(row.date) >= cutoff)
+      .map((row) => ({
+        date: row.date,
+        spy: nearestSPY(row.date, spyMap),
+        ctaZScore: parseFloat(row.zScore.toFixed(3)),
+        netPositionPct: parseFloat(row.netPositionPct.toFixed(2)),
+      }))
+      .filter((row) => row.spy !== null);
+
+    if (!finalData.length) throw new Error('No matched data after alignment');
+
+    // ── 6. Store in Upstash Redis ─────────────────────────────────────────────
+    const payload = {
+      updatedAt: new Date().toISOString(),
+      rows: finalData.length,
+      data: finalData,
+    };
+    await redis.set('cta_tracker_data', JSON.stringify(payload));
+
+    return Response.json({ success: true, rows: finalData.length, updatedAt: payload.updatedAt });
+  } catch (err) {
+    console.error('[cron] Error:', err.message);
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+}
