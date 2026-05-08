@@ -5,20 +5,21 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-export async function GET() {
-  try {
-    const cached = await redis.get('cta_tracker_data');
+const VALID_ASSETS = ['spx', 'ndx', 'rut', 'ust10', 'usd', 'gold', 'copper', 'oil'];
 
+export async function GET(request) {
+  try {
+    const asset = new URL(request.url).searchParams.get('asset') || 'spx';
+    if (!VALID_ASSETS.includes(asset)) {
+      return Response.json({ error: 'Invalid asset' }, { status: 400 });
+    }
+    const cached = await redis.get(`cta_data_${asset}`);
     if (!cached) {
       return Response.json(
-        {
-          error: 'No data in database yet.',
-          hint: 'Seed the database by visiting /api/cron?secret=YOUR_CRON_SECRET',
-        },
+        { error: `No data for ${asset}.`, hint: 'Seed the database first.' },
         { status: 404 }
       );
     }
-
     const payload = typeof cached === 'string' ? JSON.parse(cached) : cached;
     return Response.json(payload);
   } catch (err) {
