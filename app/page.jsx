@@ -1,168 +1,262 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
+import { useEffect, useState, useCallback } from 'react';
+import {
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ReferenceLine, ResponsiveContainer,
+} from 'recharts';
+
+const ASSETS = [
+  { key: 'spx',    label: 'S&P 500',      etf: 'SPY',  color: '#22d3ee' },
+  { key: 'ndx',    label: 'Nasdaq 100',   etf: 'QQQ',  color: '#a78bfa' },
+  { key: 'rut',    label: 'Russell 2000', etf: 'IWM',  color: '#34d399' },
+  { key: 'ust10',  label: '10Y Treasury', etf: 'TLT',  color: '#fbbf24' },
+  { key: 'usd',    label: 'US Dollar',    etf: 'UUP',  color: '#f472b6' },
+  { key: 'gold',   label: 'Gold',         etf: 'GLD',  color: '#fcd34d' },
+  { key: 'copper', label: 'Copper',       etf: 'CPER', color: '#fb923c' },
+  { key: 'oil',    label: 'Oil (WTI)',    etf: 'USO',  color: '#94a3b8' },
+];
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
 
 export default function Home() {
-  const [chartData, setChartData] = useState([]);
-  const [meta, setMeta] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [activeTab,      setActiveTab]      = useState('dashboard');
+  const [selectedAsset,  setSelectedAsset]  = useState('spx');
+  const [chartData,      setChartData]      = useState([]);
+  const [meta,           setMeta]           = useState(null);
+  const [error,          setError]          = useState(null);
+  const [loading,        setLoading]        = useState(true);
 
-  useEffect(() => {
-    fetch('/api/data')
+  const fetchData = useCallback((assetKey) => {
+    setLoading(true);
+    setError(null);
+    fetch(`/api/data?asset=${assetKey}`)
       .then(r => r.json())
       .then(p => {
-        if (p.error) { setError(p.error); } 
+        if (p.error) setError(p.error);
         else { setChartData(p.data || []); setMeta(p); }
         setLoading(false);
       })
       .catch(e => { setError(e.message); setLoading(false); });
   }, []);
 
-  if (loading) {
-    return (
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#030712'}}>
-        <p style={{color:'#9ca3af'}}>Loading CTA data...</p>
-      </div>
-    );
-  }
+  useEffect(() => { fetchData(selectedAsset); }, [selectedAsset, fetchData]);
 
-  if (error || !chartData.length) {
-    return (
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#030712'}}>
-        <div style={{border:'1px solid #ef4444',borderRadius:12,padding:32,textAlign:'center',maxWidth:400}}>
-          <p style={{color:'#ef4444',fontWeight:'bold',marginBottom:8}}>{error || 'No data available'}</p>
-          <p style={{color:'#6b7280',fontSize:12,marginTop:12}}>
-            Visit /api/cron?secret=YOUR_CRON_SECRET to seed data
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const latest = chartData[chartData.length - 1];
-  const z = latest?.ctaZScore ?? 0;
-  const zColor = Math.abs(z) > 2 ? '#ef4444' : Math.abs(z) > 1.5 ? '#f59e0b' : '#22c55e';
-  const zLabel = Math.abs(z) > 2 ? 'EXTREME' : Math.abs(z) > 1.5 ? 'ELEVATED' : 'NORMAL';
+  const asset        = ASSETS.find(a => a.key === selectedAsset);
+  const latest       = chartData[chartData.length - 1];
+  const z            = latest?.ctaZScore ?? 0;
+  const zColor       = Math.abs(z) > 2 ? '#ef4444' : Math.abs(z) > 1.5 ? '#f59e0b' : '#22c55e';
+  const zLabel       = Math.abs(z) > 2 ? 'EXTREME' : Math.abs(z) > 1.5 ? 'ELEVATED' : 'NORMAL';
   const extremeWeeks = chartData.filter(d => Math.abs(d.ctaZScore) > 2).length;
-  const maxLong = Math.max(...chartData.map(d => d.ctaZScore));
+  const maxZ         = chartData.length ? Math.max(...chartData.map(d => d.ctaZScore)) : 0;
 
   return (
-    <div style={{background:'#030712',minHeight:'100vh',color:'white',padding:'24px 16px'}}>
-      <div style={{maxWidth:1100,margin:'0 auto'}}>
+    <div style={{ background: '#030712', minHeight: '100vh', color: 'white', padding: '24px 16px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
-        <h1 style={{fontSize:24,fontWeight:700,marginBottom:4}}>CTA Position Tracker</h1>
-        <p style={{color:'#9ca3af',fontSize:13,marginBottom:4}}>S&P 500 Futures · Managed Money · 52-Week Z-Score</p>
-        <p style={{color:'#4b5563',fontSize:12,marginBottom:24}}>
-          Source: CFTC COT Report · Updated: {meta?.updatedAt ? new Date(meta.updatedAt).toDateString() : '—'}
+        {/* Header */}
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>CTA Position Tracker</h1>
+        <p style={{ color: '#9ca3af', fontSize: 13, marginBottom: 20 }}>
+          Managed Money Positioning · CFTC COT · 52-Week Z-Score · 5-Week SMA
         </p>
 
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:24}}>
-          <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:12,padding:16}}>
-            <p style={{color:'#6b7280',fontSize:11,textTransform:'uppercase',marginBottom:4}}>Current Z-Score</p>
-            <p style={{color:zColor,fontSize:22,fontWeight:700}}>{z > 0 ? '+' : ''}{z.toFixed(2)}σ</p>
-            <p style={{color:zColor,fontSize:11,marginTop:2}}>{zLabel}</p>
-          </div>
-          <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:12,padding:16}}>
-            <p style={{color:'#6b7280',fontSize:11,textTransform:'uppercase',marginBottom:4}}>SPY Latest</p>
-            <p style={{color:'#22d3ee',fontSize:22,fontWeight:700}}>${latest?.spy?.toFixed(2)}</p>
-            <p style={{color:'#4b5563',fontSize:11,marginTop:2}}>{latest?.date}</p>
-          </div>
-          <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:12,padding:16}}>
-            <p style={{color:'#6b7280',fontSize:11,textTransform:'uppercase',marginBottom:4}}>3Y Max Long</p>
-            <p style={{color:'#f97316',fontSize:22,fontWeight:700}}>+{maxLong.toFixed(2)}σ</p>
-            <p style={{color:'#4b5563',fontSize:11,marginTop:2}}>{extremeWeeks} extreme weeks</p>
-          </div>
+        {/* Top-level tabs */}
+        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #1f2937', marginBottom: 24 }}>
+          {[{ key: 'dashboard', label: 'Dashboard' }, { key: 'howto', label: 'How to Use' }].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                padding: '8px 20px', fontSize: 13, fontWeight: 600,
+                border: 'none', cursor: 'pointer', background: 'transparent',
+                color: activeTab === tab.key ? 'white' : '#6b7280',
+                borderBottom: activeTab === tab.key ? '2px solid #22d3ee' : '2px solid transparent',
+                marginBottom: -1,
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:12,padding:20,marginBottom:24}}>
-          <div style={{display:'flex',gap:24,marginBottom:16,fontSize:13}}>
-            <span style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{display:'inline-block',width:28,height:2,background:'#22d3ee'}}></span>
-              <span style={{color:'#9ca3af'}}>SPY Price</span>
-            </span>
-            <span style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{display:'inline-block',width:28,height:2,background:'#f97316'}}></span>
-              <span style={{color:'#9ca3af'}}>CTA Z-Score</span>
-            </span>
-            <span style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{display:'inline-block',width:28,height:2,borderTop:'2px dashed #ef4444'}}></span>
-              <span style={{color:'#9ca3af'}}>±2σ Threshold</span>
-            </span>
-          </div>
-          <ResponsiveContainer width="100%" height={440}>
-            <ComposedChart data={chartData} margin={{top:8,right:50,left:0,bottom:4}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="date" stroke="#374151" tick={{fill:'#6b7280',fontSize:11}} tickFormatter={formatDate} minTickGap={50} />
-           <YAxis yAxisId="spy" orientation="left" stroke="#22d3ee" tick={{fill:'#22d3ee',fontSize:11}} tickFormatter={v => `$${v}`} width={56} domain={['auto', 'auto']} />
-              <YAxis yAxisId="z" orientation="right" stroke="#f97316" tick={{fill:'#f97316',fontSize:11}} tickFormatter={v => `${v>0?'+':''}${v.toFixed(1)}σ`} domain={[-3.5,3.5]} width={50} />
-              <Tooltip />
-              <ReferenceLine yAxisId="z" y={2} stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5} label={{value:'+2σ',position:'right',fill:'#ef4444',fontSize:11}} />
-              <ReferenceLine yAxisId="z" y={-2} stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5} label={{value:'−2σ',position:'right',fill:'#ef4444',fontSize:11}} />
-              <ReferenceLine yAxisId="z" y={0} stroke="#374151" strokeDasharray="2 4" />
-              <Line yAxisId="spy" type="monotone" dataKey="spy" stroke="#22d3ee" strokeWidth={2} dot={false} isAnimationActive={false} name="SPY" />
-              <Line yAxisId="z" type="monotone" dataKey="ctaZScore" stroke="#f97316" strokeWidth={2} dot={false} isAnimationActive={false} name="CTA Z-Score" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+        {/* ── DASHBOARD ── */}
+        {activeTab === 'dashboard' && (
+          <>
+            {/* Asset selector */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+              {ASSETS.map(a => (
+                <button
+                  key={a.key}
+                  onClick={() => setSelectedAsset(a.key)}
+                  style={{
+                    padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    borderRadius: 20,
+                    border: `1px solid ${selectedAsset === a.key ? a.color : '#1f2937'}`,
+                    background: selectedAsset === a.key ? `${a.color}22` : '#111827',
+                    color: selectedAsset === a.key ? a.color : '#9ca3af',
+                  }}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:24}}>
-          <div style={{background:'#111827',border:'1px solid #14532d',borderRadius:12,padding:16}}>
-            <p style={{color:'#22c55e',fontWeight:600,fontSize:13,marginBottom:4}}>Normal · |Z| &lt; 1.5σ</p>
-            <p style={{color:'#9ca3af',fontSize:12}}>Positioning balanced. No crowding risk.</p>
-          </div>
-          <div style={{background:'#111827',border:'1px solid #78350f',borderRadius:12,padding:16}}>
-            <p style={{color:'#f59e0b',fontWeight:600,fontSize:13,marginBottom:4}}>Elevated · 1.5σ – 2σ</p>
-            <p style={{color:'#9ca3af',fontSize:12}}>Positioning stretched. Watch for exhaustion.</p>
-          </div>
-          <div style={{background:'#111827',border:'1px solid #7f1d1d',borderRadius:12,padding:16}}>
-            <p style={{color:'#ef4444',fontWeight:600,fontSize:13,marginBottom:4}}>Extreme · |Z| &gt; 2σ</p>
-            <p style={{color:'#9ca3af',fontSize:12}}>Max long/short. High liquidation risk.</p>
-          </div>
-        </div>
-
-        {/* How to Use */}
-        <div style={{background:'#0c1220',border:'1px solid #1e3a5f',borderRadius:12,padding:24,marginBottom:24}}>
-          <p style={{color:'#22d3ee',fontWeight:700,fontSize:15,marginBottom:16}}>How to Use This Chart</p>
-
-          <p style={{color:'#6b7280',fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Data Source</p>
-          <p style={{color:'#9ca3af',fontSize:13,lineHeight:1.7,marginBottom:16}}>
-            Weekly CFTC Commitments of Traders (COT) report — specifically the <span style={{color:'#e5e7eb'}}>Traders in Financial Futures (TFF)</span> report
-            for S&amp;P 500 Consolidated futures (CME: 13874+). The <span style={{color:'#e5e7eb'}}>"Leveraged Money"</span> category is used as the CTA proxy,
-            which includes registered CTAs, commodity pool operators, and hedge funds with a trend-following mandate.
-          </p>
-
-          <p style={{color:'#6b7280',fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Methodology</p>
-          <p style={{color:'#9ca3af',fontSize:13,lineHeight:1.7,marginBottom:16}}>
-            Net positioning (longs minus shorts) is calculated as a percentage of total open interest each week.
-            A <span style={{color:'#e5e7eb'}}>52-week rolling z-score</span> is then applied — this normalizes the raw position data so you can see
-            whether current positioning is historically extreme, regardless of changes in market size over time.
-          </p>
-
-          <p style={{color:'#6b7280',fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10}}>Reading the Chart</p>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-            {[
-              {color:'#22d3ee', label:'Cyan line (left axis)', text:'SPY price'},
-              {color:'#f97316', label:'Orange line (right axis)', text:'CTA positioning z-score'},
-              {color:'#ef4444', label:'±2σ red bands', text:'Extreme positioning thresholds'},
-              {color:'#9ca3af', label:'CTA lag', text:'CTAs trail price by 3–8 weeks — price moves first, they react after'},
-              {color:'#9ca3af', label:'Z > +2σ', text:'CTAs extremely long — forced selling risk if trend reverses'},
-              {color:'#9ca3af', label:'Z < −2σ', text:'CTAs extremely short — short-covering fuel if market rallies'},
-              {color:'#9ca3af', label:'Divergence', text:'Price rising but CTAs not adding = weakening momentum signal'},
-            ].map((item, i) => (
-              <div key={i} style={{background:'#111827',borderRadius:8,padding:12}}>
-                <p style={{color:item.color,fontSize:12,fontWeight:600,marginBottom:3}}>{item.label}</p>
-                <p style={{color:'#6b7280',fontSize:12,lineHeight:1.5}}>{item.text}</p>
+            {loading && (
+              <div style={{ textAlign: 'center', padding: 80, color: '#9ca3af' }}>
+                Loading {asset?.label} data…
               </div>
-            ))}
-          </div>
-        </div>
+            )}
 
-        <p style={{color:'#374151',fontSize:11,textAlign:'center',paddingBottom:24}}>
+            {!loading && (error || !chartData.length) && (
+              <div style={{ border: '1px solid #ef4444', borderRadius: 12, padding: 32, textAlign: 'center' }}>
+                <p style={{ color: '#ef4444', fontWeight: 'bold' }}>{error || 'No data available'}</p>
+                <p style={{ color: '#6b7280', fontSize: 12, marginTop: 8 }}>Seed this asset via the upload tool first.</p>
+              </div>
+            )}
+
+            {!loading && !error && chartData.length > 0 && (
+              <>
+                {/* Stat cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 16 }}>
+                    <p style={{ color: '#6b7280', fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>Current Z-Score</p>
+                    <p style={{ color: zColor, fontSize: 22, fontWeight: 700 }}>{z > 0 ? '+' : ''}{z.toFixed(2)}σ</p>
+                    <p style={{ color: zColor, fontSize: 11, marginTop: 2 }}>{zLabel}</p>
+                  </div>
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 16 }}>
+                    <p style={{ color: '#6b7280', fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>{asset?.etf} Price</p>
+                    <p style={{ color: asset?.color, fontSize: 22, fontWeight: 700 }}>${latest?.price?.toFixed(2)}</p>
+                    <p style={{ color: '#4b5563', fontSize: 11, marginTop: 2 }}>{latest?.date}</p>
+                  </div>
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 16 }}>
+                    <p style={{ color: '#6b7280', fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>3Y Max Long</p>
+                    <p style={{ color: '#f97316', fontSize: 22, fontWeight: 700 }}>+{maxZ.toFixed(2)}σ</p>
+                    <p style={{ color: '#4b5563', fontSize: 11, marginTop: 2 }}>{extremeWeeks} extreme weeks</p>
+                  </div>
+                </div>
+
+                {/* Chart */}
+                <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 20, marginBottom: 24 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <p style={{ color: 'white', fontWeight: 600, fontSize: 14 }}>{asset?.label} · CTA Positioning</p>
+                    <p style={{ color: '#4b5563', fontSize: 11 }}>Updated: {meta?.updatedAt ? new Date(meta.updatedAt).toDateString() : '—'}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 24, marginBottom: 12, fontSize: 12 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ display: 'inline-block', width: 24, height: 2, background: asset?.color }} />
+                      <span style={{ color: '#9ca3af' }}>{asset?.etf} Price</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ display: 'inline-block', width: 24, height: 2, background: '#f97316' }} />
+                      <span style={{ color: '#9ca3af' }}>CTA Z-Score (5w SMA)</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ display: 'inline-block', width: 24, height: 2, borderTop: '2px dashed #ef4444' }} />
+                      <span style={{ color: '#9ca3af' }}>±2σ Threshold</span>
+                    </span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={440}>
+                    <ComposedChart data={chartData} margin={{ top: 8, right: 50, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="date" stroke="#374151" tick={{ fill: '#6b7280', fontSize: 11 }} tickFormatter={formatDate} minTickGap={50} />
+                      <YAxis yAxisId="price" orientation="left" stroke={asset?.color} tick={{ fill: asset?.color, fontSize: 11 }} tickFormatter={v => `$${v.toFixed(0)}`} width={56} domain={['auto', 'auto']} />
+                      <YAxis yAxisId="z" orientation="right" stroke="#f97316" tick={{ fill: '#f97316', fontSize: 11 }} tickFormatter={v => `${v > 0 ? '+' : ''}${v.toFixed(1)}σ`} domain={[-3.5, 3.5]} width={50} />
+                      <Tooltip
+                        contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
+                        labelStyle={{ color: '#9ca3af', fontSize: 11 }}
+                        formatter={(v, name) => name.includes('Price') ? [`$${v?.toFixed(2)}`, name] : [`${v > 0 ? '+' : ''}${v?.toFixed(2)}σ`, name]}
+                      />
+                      <ReferenceLine yAxisId="z" y={2}  stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: '+2σ', position: 'right', fill: '#ef4444', fontSize: 11 }} />
+                      <ReferenceLine yAxisId="z" y={-2} stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: '−2σ', position: 'right', fill: '#ef4444', fontSize: 11 }} />
+                      <ReferenceLine yAxisId="z" y={0} stroke="#374151" strokeDasharray="2 4" />
+                      <Line yAxisId="price" type="monotone" dataKey="price"     stroke={asset?.color} strokeWidth={2} dot={false} isAnimationActive={false} name={`${asset?.etf} Price`} />
+                      <Line yAxisId="z"     type="monotone" dataKey="ctaZScore" stroke="#f97316"      strokeWidth={2} dot={false} isAnimationActive={false} name="CTA Z-Score" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Signal legend */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
+                  <div style={{ background: '#111827', border: '1px solid #14532d', borderRadius: 12, padding: 16 }}>
+                    <p style={{ color: '#22c55e', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Normal · |Z| &lt; 1.5σ</p>
+                    <p style={{ color: '#9ca3af', fontSize: 12 }}>Positioning balanced. No crowding risk.</p>
+                  </div>
+                  <div style={{ background: '#111827', border: '1px solid #78350f', borderRadius: 12, padding: 16 }}>
+                    <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Elevated · 1.5σ – 2σ</p>
+                    <p style={{ color: '#9ca3af', fontSize: 12 }}>Positioning stretched. Watch for exhaustion.</p>
+                  </div>
+                  <div style={{ background: '#111827', border: '1px solid #7f1d1d', borderRadius: 12, padding: 16 }}>
+                    <p style={{ color: '#ef4444', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Extreme · |Z| &gt; 2σ</p>
+                    <p style={{ color: '#9ca3af', fontSize: 12 }}>Max long/short. High liquidation risk.</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── HOW TO USE ── */}
+        {activeTab === 'howto' && (
+          <div style={{ background: '#0c1220', border: '1px solid #1e3a5f', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+            <p style={{ color: '#22d3ee', fontWeight: 700, fontSize: 15, marginBottom: 16 }}>How to Use This Dashboard</p>
+
+            <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Data Source</p>
+            <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
+              Weekly CFTC Commitments of Traders (COT) report — the <span style={{ color: '#e5e7eb' }}>Traders in Financial Futures (TFF)</span> report
+              for equity index, rates and currency futures; and the <span style={{ color: '#e5e7eb' }}>Disaggregated COT</span> report for commodities
+              (Gold, Copper, Oil). The <span style={{ color: '#e5e7eb' }}>"Leveraged Money"</span> category is used as the CTA proxy —
+              registered CTAs, commodity pool operators, and trend-following hedge funds.
+            </p>
+
+            <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Methodology</p>
+            <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
+              Net positioning (longs minus shorts) is calculated as a percentage of total open interest each week.
+              A <span style={{ color: '#e5e7eb' }}>52-week rolling z-score</span> normalizes the raw position data so you can identify
+              historically extreme crowding regardless of changes in market size over time. A <span style={{ color: '#e5e7eb' }}>5-week simple
+              moving average</span> is then applied to reduce week-to-week noise while preserving the signal.
+            </p>
+
+            <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Reading the Chart</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+              {[
+                { color: '#9ca3af', label: 'Coloured line (left axis)',   text: 'ETF price for the selected asset' },
+                { color: '#f97316', label: 'Orange line (right axis)',     text: 'CTA positioning z-score (5-week smoothed)' },
+                { color: '#ef4444', label: '±2σ red bands',               text: 'Extreme positioning thresholds' },
+                { color: '#9ca3af', label: 'Z > +2σ',                     text: 'CTAs extremely long — forced selling risk if trend reverses' },
+                { color: '#9ca3af', label: 'Z < −2σ',                     text: 'CTAs extremely short — short-covering fuel if market rallies' },
+                { color: '#9ca3af', label: 'Divergence',                  text: 'Price rising but CTAs not adding = weakening momentum signal' },
+              ].map((item, i) => (
+                <div key={i} style={{ background: '#111827', borderRadius: 8, padding: 12 }}>
+                  <p style={{ color: item.color, fontSize: 12, fontWeight: 600, marginBottom: 3 }}>{item.label}</p>
+                  <p style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.5 }}>{item.text}</p>
+                </div>
+              ))}
+            </div>
+
+            <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Assets Tracked</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+              {[
+                { label: 'S&P 500',      detail: 'CME 13874+',  report: 'TFF' },
+                { label: 'Nasdaq 100',   detail: 'CME 209742',  report: 'TFF' },
+                { label: 'Russell 2000', detail: 'CME 239742',  report: 'TFF' },
+                { label: '10Y Treasury', detail: 'CFTC 043602', report: 'TFF' },
+                { label: 'US Dollar',    detail: 'CFTC 098662', report: 'TFF' },
+                { label: 'Gold',         detail: 'CFTC 088691', report: 'Disagg' },
+                { label: 'Copper',       detail: 'CFTC 085692', report: 'Disagg' },
+                { label: 'Oil (WTI)',    detail: 'CFTC 067651', report: 'Disagg' },
+              ].map((item, i) => (
+                <div key={i} style={{ background: '#111827', borderRadius: 8, padding: 10 }}>
+                  <p style={{ color: '#e5e7eb', fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{item.label}</p>
+                  <p style={{ color: '#6b7280', fontSize: 11 }}>{item.detail}</p>
+                  <p style={{ color: '#374151', fontSize: 10 }}>{item.report} Report</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p style={{ color: '#374151', fontSize: 11, textAlign: 'center', paddingBottom: 24 }}>
           For informational purposes only · Not investment advice · COT data reflects Tuesday positions published Friday
         </p>
       </div>
