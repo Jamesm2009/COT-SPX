@@ -6,14 +6,14 @@ import {
 } from 'recharts';
 
 const ASSETS = [
-  { key: 'spx',    label: 'S&P 500',      etf: 'SPY',  color: '#22d3ee' },
-  { key: 'ndx',    label: 'Nasdaq 100',   etf: 'QQQ',  color: '#a78bfa' },
-  { key: 'rut',    label: 'Russell 2000', etf: 'IWM',  color: '#34d399' },
-  { key: 'ust10',  label: '10Y Treasury', etf: 'TLT',  color: '#fbbf24' },
-  { key: 'usd',    label: 'US Dollar',    etf: 'UUP',  color: '#f472b6' },
-  { key: 'gold',   label: 'Gold',         etf: 'GLD',  color: '#fcd34d' },
-  { key: 'copper', label: 'Copper',       etf: 'CPER', color: '#fb923c' },
-  { key: 'oil',    label: 'Oil (WTI)',    etf: 'USO',  color: '#94a3b8' },
+  { key: 'spx',    label: 'S&P 500',      etf: 'SPY',  etfKey: 'spy',  color: '#22d3ee' },
+  { key: 'ndx',    label: 'Nasdaq 100',   etf: 'QQQ',  etfKey: 'qqq',  color: '#a78bfa' },
+  { key: 'rut',    label: 'Russell 2000', etf: 'IWM',  etfKey: 'iwm',  color: '#34d399' },
+  { key: 'ust10',  label: '10Y Treasury', etf: 'TLT',  etfKey: 'tlt',  color: '#fbbf24' },
+  { key: 'usd',    label: 'US Dollar',    etf: 'UUP',  etfKey: 'uup',  color: '#f472b6' },
+  { key: 'gold',   label: 'Gold',         etf: 'GLD',  etfKey: 'gld',  color: '#fcd34d' },
+  { key: 'copper', label: 'Copper',       etf: 'CPER', etfKey: 'cper', color: '#fb923c' },
+  { key: 'oil',    label: 'Oil (WTI)',    etf: 'USO',  etfKey: 'uso',  color: '#94a3b8' },
 ];
 
 function formatDate(d) {
@@ -21,21 +21,31 @@ function formatDate(d) {
 }
 
 export default function Home() {
-  const [activeTab,      setActiveTab]      = useState('dashboard');
-  const [selectedAsset,  setSelectedAsset]  = useState('spx');
-  const [chartData,      setChartData]      = useState([]);
-  const [meta,           setMeta]           = useState(null);
-  const [error,          setError]          = useState(null);
-  const [loading,        setLoading]        = useState(true);
+  const [activeTab,     setActiveTab]     = useState('dashboard');
+  const [selectedAsset, setSelectedAsset] = useState('spx');
+  const [chartData,     setChartData]     = useState([]);
+  const [meta,          setMeta]          = useState(null);
+  const [error,         setError]         = useState(null);
+  const [loading,       setLoading]       = useState(true);
 
   const fetchData = useCallback((assetKey) => {
     setLoading(true);
     setError(null);
+    const assetDef = ASSETS.find(a => a.key === assetKey);
     fetch(`/api/data?asset=${assetKey}`)
       .then(r => r.json())
       .then(p => {
-        if (p.error) setError(p.error);
-        else { setChartData(p.data || []); setMeta(p); }
+        if (p.error) {
+          setError(p.error);
+        } else {
+          // ── KEY FIX: remap the ETF-specific field (e.g. 'spy', 'qqq') to 'price'
+          const rows = (p.data || []).map(row => ({
+            ...row,
+            price: row[assetDef?.etfKey] ?? row.etf_close ?? row.price ?? null,
+          }));
+          setChartData(rows);
+          setMeta(p);
+        }
         setLoading(false);
       })
       .catch(e => { setError(e.message); setLoading(false); });
@@ -52,45 +62,46 @@ export default function Home() {
   const maxZ         = chartData.length ? Math.max(...chartData.map(d => d.ctaZScore)) : 0;
 
   return (
-    <div style={{ background: '#030712', minHeight: '100vh', color: 'white', padding: '24px 16px' }}>
+    <div style={{ background: '#030712', minHeight: '100vh', color: 'white', padding: '12px 16px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
-        {/* Header */}
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>CTA Position Tracker</h1>
-        <p style={{ color: '#9ca3af', fontSize: 13, marginBottom: 20 }}>
-          Managed Money Positioning · CFTC COT · 52-Week Z-Score · 5-Week SMA
-        </p>
-
-        {/* Top-level tabs */}
-        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #1f2937', marginBottom: 24 }}>
-          {[{ key: 'dashboard', label: 'Dashboard' }, { key: 'howto', label: 'How to Use' }].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                padding: '8px 20px', fontSize: 13, fontWeight: 600,
-                border: 'none', cursor: 'pointer', background: 'transparent',
-                color: activeTab === tab.key ? 'white' : '#6b7280',
-                borderBottom: activeTab === tab.key ? '2px solid #22d3ee' : '2px solid transparent',
-                marginBottom: -1,
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* ── Compact header + tabs in one row ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, borderBottom: '1px solid #1f2937', marginBottom: 16, paddingBottom: 8 }}>
+          <div>
+            <h1 style={{ fontSize: 17, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>CTA Position Tracker</h1>
+            <p style={{ color: '#4b5563', fontSize: 11, marginTop: 2 }}>
+              Managed Money · CFTC COT · 52-Week Z-Score · 5-Week SMA
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[{ key: 'dashboard', label: 'Dashboard' }, { key: 'howto', label: 'How to Use' }].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  padding: '5px 14px', fontSize: 12, fontWeight: 600,
+                  border: 'none', cursor: 'pointer', background: 'transparent',
+                  color: activeTab === tab.key ? 'white' : '#6b7280',
+                  borderBottom: activeTab === tab.key ? '2px solid #22d3ee' : '2px solid transparent',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── DASHBOARD ── */}
         {activeTab === 'dashboard' && (
           <>
             {/* Asset selector */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
               {ASSETS.map(a => (
                 <button
                   key={a.key}
                   onClick={() => setSelectedAsset(a.key)}
                   style={{
-                    padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    padding: '4px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                     borderRadius: 20,
                     border: `1px solid ${selectedAsset === a.key ? a.color : '#1f2937'}`,
                     background: selectedAsset === a.key ? `${a.color}22` : '#111827',
@@ -118,50 +129,50 @@ export default function Home() {
             {!loading && !error && chartData.length > 0 && (
               <>
                 {/* Stat cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
-                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 16 }}>
-                    <p style={{ color: '#6b7280', fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>Current Z-Score</p>
-                    <p style={{ color: zColor, fontSize: 22, fontWeight: 700 }}>{z > 0 ? '+' : ''}{z.toFixed(2)}σ</p>
-                    <p style={{ color: zColor, fontSize: 11, marginTop: 2 }}>{zLabel}</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>Current Z-Score</p>
+                    <p style={{ color: zColor, fontSize: 20, fontWeight: 700, lineHeight: 1 }}>{z > 0 ? '+' : ''}{z.toFixed(2)}σ</p>
+                    <p style={{ color: zColor, fontSize: 10, marginTop: 3 }}>{zLabel}</p>
                   </div>
-                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 16 }}>
-                    <p style={{ color: '#6b7280', fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>{asset?.etf} Price</p>
-                    <p style={{ color: asset?.color, fontSize: 22, fontWeight: 700 }}>${latest?.price?.toFixed(2)}</p>
-                    <p style={{ color: '#4b5563', fontSize: 11, marginTop: 2 }}>{latest?.date}</p>
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>{asset?.etf} Price</p>
+                    <p style={{ color: asset?.color, fontSize: 20, fontWeight: 700, lineHeight: 1 }}>${latest?.price?.toFixed(2) ?? '—'}</p>
+                    <p style={{ color: '#4b5563', fontSize: 10, marginTop: 3 }}>{latest?.date}</p>
                   </div>
-                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 16 }}>
-                    <p style={{ color: '#6b7280', fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>3Y Max Long</p>
-                    <p style={{ color: '#f97316', fontSize: 22, fontWeight: 700 }}>+{maxZ.toFixed(2)}σ</p>
-                    <p style={{ color: '#4b5563', fontSize: 11, marginTop: 2 }}>{extremeWeeks} extreme weeks</p>
+                  <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>3Y Max Long</p>
+                    <p style={{ color: '#f97316', fontSize: 20, fontWeight: 700, lineHeight: 1 }}>+{maxZ.toFixed(2)}σ</p>
+                    <p style={{ color: '#4b5563', fontSize: 10, marginTop: 3 }}>{extremeWeeks} extreme weeks</p>
                   </div>
                 </div>
 
                 {/* Chart */}
-                <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: 20, marginBottom: 24 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <p style={{ color: 'white', fontWeight: 600, fontSize: 14 }}>{asset?.label} · CTA Positioning</p>
+                <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: '14px 14px 8px', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <p style={{ color: 'white', fontWeight: 600, fontSize: 13 }}>{asset?.label} · CTA Positioning</p>
                     <p style={{ color: '#4b5563', fontSize: 11 }}>Updated: {meta?.updatedAt ? new Date(meta.updatedAt).toDateString() : '—'}</p>
                   </div>
-                  <div style={{ display: 'flex', gap: 24, marginBottom: 12, fontSize: 12 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 24, height: 2, background: asset?.color }} />
+                  <div style={{ display: 'flex', gap: 20, marginBottom: 8, fontSize: 11 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 20, height: 2, background: asset?.color }} />
                       <span style={{ color: '#9ca3af' }}>{asset?.etf} Price</span>
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 24, height: 2, background: '#f97316' }} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 20, height: 2, background: '#f97316' }} />
                       <span style={{ color: '#9ca3af' }}>CTA Z-Score (5w SMA)</span>
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 24, height: 2, borderTop: '2px dashed #ef4444' }} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 20, height: 2, borderTop: '2px dashed #ef4444' }} />
                       <span style={{ color: '#9ca3af' }}>±2σ Threshold</span>
                     </span>
                   </div>
-                  <ResponsiveContainer width="100%" height={440}>
-                    <ComposedChart data={chartData} margin={{ top: 8, right: 50, left: 0, bottom: 4 }}>
+                  <ResponsiveContainer width="100%" height={420}>
+                    <ComposedChart data={chartData} margin={{ top: 4, right: 50, left: 0, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                       <XAxis dataKey="date" stroke="#374151" tick={{ fill: '#6b7280', fontSize: 11 }} tickFormatter={formatDate} minTickGap={50} />
-                      <YAxis yAxisId="price" orientation="left" stroke={asset?.color} tick={{ fill: asset?.color, fontSize: 11 }} tickFormatter={v => `$${v.toFixed(0)}`} width={56} domain={['auto', 'auto']} />
-                      <YAxis yAxisId="z" orientation="right" stroke="#f97316" tick={{ fill: '#f97316', fontSize: 11 }} tickFormatter={v => `${v > 0 ? '+' : ''}${v.toFixed(1)}σ`} domain={[-3.5, 3.5]} width={50} />
+                      <YAxis yAxisId="price" orientation="left"  stroke={asset?.color} tick={{ fill: asset?.color, fontSize: 11 }} tickFormatter={v => `$${v.toFixed(0)}`} width={56} domain={['auto', 'auto']} />
+                      <YAxis yAxisId="z"     orientation="right" stroke="#f97316"      tick={{ fill: '#f97316',      fontSize: 11 }} tickFormatter={v => `${v > 0 ? '+' : ''}${v.toFixed(1)}σ`} domain={[-3.5, 3.5]} width={50} />
                       <Tooltip
                         contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
                         labelStyle={{ color: '#9ca3af', fontSize: 11 }}
@@ -169,26 +180,26 @@ export default function Home() {
                       />
                       <ReferenceLine yAxisId="z" y={2}  stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: '+2σ', position: 'right', fill: '#ef4444', fontSize: 11 }} />
                       <ReferenceLine yAxisId="z" y={-2} stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: '−2σ', position: 'right', fill: '#ef4444', fontSize: 11 }} />
-                      <ReferenceLine yAxisId="z" y={0} stroke="#374151" strokeDasharray="2 4" />
-                      <Line yAxisId="price" type="monotone" dataKey="price"     stroke={asset?.color} strokeWidth={2} dot={false} isAnimationActive={false} name={`${asset?.etf} Price`} />
-                      <Line yAxisId="z"     type="monotone" dataKey="ctaZScore" stroke="#f97316"      strokeWidth={2} dot={false} isAnimationActive={false} name="CTA Z-Score" />
+                      <ReferenceLine yAxisId="z" y={0}  stroke="#374151" strokeDasharray="2 4" />
+                      <Line yAxisId="price" type="monotone" dataKey="price"     stroke={asset?.color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls name={`${asset?.etf} Price`} />
+                      <Line yAxisId="z"     type="monotone" dataKey="ctaZScore" stroke="#f97316"      strokeWidth={2} dot={false} isAnimationActive={false} connectNulls name="CTA Z-Score" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
 
                 {/* Signal legend */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
-                  <div style={{ background: '#111827', border: '1px solid #14532d', borderRadius: 12, padding: 16 }}>
-                    <p style={{ color: '#22c55e', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Normal · |Z| &lt; 1.5σ</p>
-                    <p style={{ color: '#9ca3af', fontSize: 12 }}>Positioning balanced. No crowding risk.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+                  <div style={{ background: '#111827', border: '1px solid #14532d', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#22c55e', fontWeight: 600, fontSize: 12, marginBottom: 3 }}>Normal · |Z| &lt; 1.5σ</p>
+                    <p style={{ color: '#9ca3af', fontSize: 11 }}>Positioning balanced. No crowding risk.</p>
                   </div>
-                  <div style={{ background: '#111827', border: '1px solid #78350f', borderRadius: 12, padding: 16 }}>
-                    <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Elevated · 1.5σ – 2σ</p>
-                    <p style={{ color: '#9ca3af', fontSize: 12 }}>Positioning stretched. Watch for exhaustion.</p>
+                  <div style={{ background: '#111827', border: '1px solid #78350f', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12, marginBottom: 3 }}>Elevated · 1.5σ – 2σ</p>
+                    <p style={{ color: '#9ca3af', fontSize: 11 }}>Positioning stretched. Watch for exhaustion.</p>
                   </div>
-                  <div style={{ background: '#111827', border: '1px solid #7f1d1d', borderRadius: 12, padding: 16 }}>
-                    <p style={{ color: '#ef4444', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Extreme · |Z| &gt; 2σ</p>
-                    <p style={{ color: '#9ca3af', fontSize: 12 }}>Max long/short. High liquidation risk.</p>
+                  <div style={{ background: '#111827', border: '1px solid #7f1d1d', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#ef4444', fontWeight: 600, fontSize: 12, marginBottom: 3 }}>Extreme · |Z| &gt; 2σ</p>
+                    <p style={{ color: '#9ca3af', fontSize: 11 }}>Max long/short. High liquidation risk.</p>
                   </div>
                 </div>
               </>
@@ -220,12 +231,12 @@ export default function Home() {
             <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Reading the Chart</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
               {[
-                { color: '#9ca3af', label: 'Coloured line (left axis)',   text: 'ETF price for the selected asset' },
-                { color: '#f97316', label: 'Orange line (right axis)',     text: 'CTA positioning z-score (5-week smoothed)' },
-                { color: '#ef4444', label: '±2σ red bands',               text: 'Extreme positioning thresholds' },
-                { color: '#9ca3af', label: 'Z > +2σ',                     text: 'CTAs extremely long — forced selling risk if trend reverses' },
-                { color: '#9ca3af', label: 'Z < −2σ',                     text: 'CTAs extremely short — short-covering fuel if market rallies' },
-                { color: '#9ca3af', label: 'Divergence',                  text: 'Price rising but CTAs not adding = weakening momentum signal' },
+                { color: '#9ca3af', label: 'Coloured line (left axis)',  text: 'ETF price for the selected asset' },
+                { color: '#f97316', label: 'Orange line (right axis)',    text: 'CTA positioning z-score (5-week smoothed)' },
+                { color: '#ef4444', label: '±2σ red bands',              text: 'Extreme positioning thresholds' },
+                { color: '#9ca3af', label: 'Z > +2σ',                    text: 'CTAs extremely long — forced selling risk if trend reverses' },
+                { color: '#9ca3af', label: 'Z < −2σ',                    text: 'CTAs extremely short — short-covering fuel if market rallies' },
+                { color: '#9ca3af', label: 'Divergence',                 text: 'Price rising but CTAs not adding = weakening momentum signal' },
               ].map((item, i) => (
                 <div key={i} style={{ background: '#111827', borderRadius: 8, padding: 12 }}>
                   <p style={{ color: item.color, fontSize: 12, fontWeight: 600, marginBottom: 3 }}>{item.label}</p>
@@ -256,11 +267,10 @@ export default function Home() {
           </div>
         )}
 
-        <p style={{ color: '#374151', fontSize: 11, textAlign: 'center', paddingBottom: 24 }}>
+        <p style={{ color: '#374151', fontSize: 11, textAlign: 'center', paddingBottom: 16 }}>
           For informational purposes only · Not investment advice · COT data reflects Tuesday positions published Friday
         </p>
       </div>
     </div>
   );
 }
-
