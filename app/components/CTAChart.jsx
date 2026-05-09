@@ -18,7 +18,7 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
 
-function CustomTooltip({ active, payload }) {
+function CustomTooltip({ active, payload, assetInfo }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -32,7 +32,7 @@ function CustomTooltip({ active, payload }) {
       boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
     }}>
       <p style={{ color: '#8b949e', marginBottom: 4, fontWeight: 600 }}>{d.date}</p>
-      <p style={{ color: '#58a6ff' }}>SPY: <strong>${d.spy?.toFixed(2)}</strong></p>
+      <p style={{ color: '#58a6ff' }}>{assetInfo?.etfLabel ?? 'ETF'}: <strong>${d.etfPrice?.toFixed(2)}</strong></p>
       <p style={{ color: '#f97316' }}>
         Z-Score: <strong>{d.ctaZScore > 0 ? '+' : ''}{d.ctaZScore?.toFixed(2)}σ</strong>
         {Math.abs(d.ctaZScore) > 2 && (
@@ -45,20 +45,20 @@ function CustomTooltip({ active, payload }) {
 }
 
 const ASSET_LABELS = {
-  spx: { label: 'S&P 500', etfKey: 'spy',    etfLabel: 'SPY' },
-  ndx: { label: 'Nasdaq',  etfKey: 'qqq',    etfLabel: 'QQQ' },
-  rut: { label: 'Russell', etfKey: 'iwm',    etfLabel: 'IWM' },
-  ust10: { label: '10Y UST', etfKey: 'tlt',  etfLabel: 'TLT' },
-  usd:  { label: 'USD',    etfKey: 'uup',    etfLabel: 'UUP' },
-  gold: { label: 'Gold',   etfKey: 'gld',    etfLabel: 'GLD' },
-  copper: { label: 'Copper', etfKey: 'cper',  etfLabel: 'CPER' },
-  oil:  { label: 'Oil',    etfKey: 'uso',    etfLabel: 'USO' },
+  spx:    { label: 'S&P 500', etfKey: 'spy',  etfLabel: 'SPY'  },
+  ndx:    { label: 'Nasdaq',  etfKey: 'qqq',  etfLabel: 'QQQ'  },
+  rut:    { label: 'Russell', etfKey: 'iwm',  etfLabel: 'IWM'  },
+  ust10:  { label: '10Y UST', etfKey: 'tlt',  etfLabel: 'TLT'  },
+  usd:    { label: 'USD',     etfKey: 'uup',  etfLabel: 'UUP'  },
+  gold:   { label: 'Gold',    etfKey: 'gld',  etfLabel: 'GLD'  },
+  copper: { label: 'Copper',  etfKey: 'cper', etfLabel: 'CPER' },
+  oil:    { label: 'Oil',     etfKey: 'uso',  etfLabel: 'USO'  },
 };
 
 const VALID_ASSETS = ['spx', 'ndx', 'rut', 'ust10', 'usd', 'gold', 'copper', 'oil'];
 
 export default function CTAChart() {
-  const [asset, setAsset]         = useState('spy');
+  const [asset, setAsset]         = useState('spx');   // ← FIXED: was 'spy'
   const [chartData, setChartData] = useState([]);
   const [meta, setMeta]           = useState(null);
   const [error, setError]         = useState(null);
@@ -86,17 +86,17 @@ export default function CTAChart() {
       .catch((e) => { setError(e.message); setLoading(false); });
   }, [asset]);
 
-  const assetInfo  = ASSET_LABELS[asset];
-  const latest     = chartData[chartData.length - 1];
-  const latestZ    = latest?.ctaZScore ?? 0;
-  const latestPx   = latest?.etfPrice  ?? 0;
+  const assetInfo    = ASSET_LABELS[asset];
+  const latest       = chartData[chartData.length - 1];
+  const latestZ      = latest?.ctaZScore ?? 0;
+  const latestPx     = latest?.etfPrice  ?? 0;
   const extremeCount = chartData.filter((d) => Math.abs(d.ctaZScore) > 2).length;
 
-  const statusColor = Math.abs(latestZ) > 2 ? '#ef4444'
-                    : Math.abs(latestZ) > 1.5 ? '#f59e0b'
+  const statusColor = Math.abs(latestZ) > 2   ? '#ef4444'
+                    : Math.abs(latestZ) > 1.5  ? '#f59e0b'
                     : '#22c55e';
-  const statusLabel = Math.abs(latestZ) > 2 ? 'EXTREME'
-                    : Math.abs(latestZ) > 1.5 ? 'ELEVATED'
+  const statusLabel = Math.abs(latestZ) > 2   ? 'EXTREME'
+                    : Math.abs(latestZ) > 1.5  ? 'ELEVATED'
                     : 'NORMAL';
 
   // Dynamic Y domain for ETF price — add 5% padding
@@ -161,10 +161,10 @@ export default function CTAChart() {
       {/* ── Compact stat bar ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         {[
-          { label: 'Z-Score', value: `${latestZ > 0 ? '+' : ''}${latestZ.toFixed(2)}σ`, sub: statusLabel, color: statusColor },
-          { label: assetInfo.etfLabel, value: `$${latestPx.toFixed(2)}`, sub: latest?.date, color: '#58a6ff' },
-          { label: 'Extreme Weeks', value: extremeCount, sub: '|Z| > 2σ', color: '#f97316' },
-          { label: 'Net % OI', value: `${latest?.netPositionPct?.toFixed(1)}%`, sub: 'vs open interest', color: '#a78bfa' },
+          { label: 'Z-Score',       value: `${latestZ > 0 ? '+' : ''}${latestZ.toFixed(2)}σ`, sub: statusLabel,                 color: statusColor  },
+          { label: assetInfo.etfLabel, value: `$${latestPx.toFixed(2)}`,                        sub: latest?.date,                color: '#58a6ff'    },
+          { label: 'Extreme Weeks', value: extremeCount,                                         sub: '|Z| > 2σ',                  color: '#f97316'    },
+          { label: 'Net % OI',      value: `${latest?.netPositionPct?.toFixed(1)}%`,             sub: 'vs open interest',          color: '#a78bfa'    },
         ].map((s) => (
           <div key={s.label} style={{
             flex: '1 1 120px',
@@ -217,7 +217,7 @@ export default function CTAChart() {
               width={52}
             />
 
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip assetInfo={assetInfo} />} />
 
             <ReferenceLine yAxisId="z" y={2}  stroke="#ef4444" strokeDasharray="4 3" strokeWidth={1.5}
               label={{ value: '+2σ', position: 'right', fill: '#ef4444', fontSize: 10 }} />
