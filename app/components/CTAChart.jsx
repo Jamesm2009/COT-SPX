@@ -51,14 +51,14 @@ const ASSET_LABELS = {
   ust10: { label: '10Y UST', etfKey: 'tlt',  etfLabel: 'TLT' },
   usd:  { label: 'USD',    etfKey: 'uup',    etfLabel: 'UUP' },
   gold: { label: 'Gold',   etfKey: 'gld',    etfLabel: 'GLD' },
-  copper: { label: 'Copper', etfKey: 'cpr',  etfLabel: 'CPR' },
+  copper: { label: 'Copper', etfKey: 'cper',  etfLabel: 'CPER' },
   oil:  { label: 'Oil',    etfKey: 'uso',    etfLabel: 'USO' },
 };
 
 const VALID_ASSETS = ['spx', 'ndx', 'rut', 'ust10', 'usd', 'gold', 'copper', 'oil'];
 
 export default function CTAChart() {
-  const [asset, setAsset]         = useState('spx');
+  const [asset, setAsset]         = useState('spy');
   const [chartData, setChartData] = useState([]);
   const [meta, setMeta]           = useState(null);
   const [error, setError]         = useState(null);
