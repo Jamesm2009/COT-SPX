@@ -39,7 +39,7 @@ function CustomTooltip({ active, payload, label, asset }) {
       <p style={{ color: '#6b7280', marginBottom: 4, fontWeight: 600 }}>{label}</p>
       {price && <p style={{ color: '#e2e8f0' }}>{asset?.etf}: <strong>${price.value?.toFixed(2)}</strong></p>}
       {z && (
-        <p style={{ color: zVal >= 0 ? '#f97316' : '#22c55e' }}>
+        <p style={{ color: zVal >= 0 ? '#22c55e' : '#ef4444' }}>
           Z-Score: <strong>{zVal > 0 ? '+' : ''}{zVal?.toFixed(2)}σ</strong>
           {Math.abs(zVal) > 2 && <span style={{ color: '#ef4444', marginLeft: 8, fontSize: 11, fontWeight: 700 }}>EXTREME</span>}
         </p>
@@ -175,49 +175,28 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* ── Chart ── */}
-                <div style={{ background: '#0d1117', border: '1px solid #1f2937', borderRadius: 12, padding: '14px 8px 8px', marginBottom: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 8, paddingRight: 8, marginBottom: 10 }}>
+                {/* ── Chart — legend floated inside top-left ── */}
+                <div style={{ position: 'relative', background: '#0d1117', border: '1px solid #1f2937', borderRadius: 12, padding: '12px 8px 8px', marginBottom: 14 }}>
+
+                  {/* Title + updated date — still outside chart area, minimal height */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 60, paddingRight: 60, marginBottom: 4 }}>
                     <p style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 13 }}>{asset?.label} · CTA Positioning</p>
                     <p style={{ color: '#374151', fontSize: 11 }}>Updated: {meta?.updatedAt ? new Date(meta.updatedAt).toDateString() : '—'}</p>
                   </div>
 
-                  {/* Legend */}
-                  <div style={{ display: 'flex', gap: 20, paddingLeft: 8, marginBottom: 10, fontSize: 11, flexWrap: 'wrap' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 22, height: 2, background: '#e2e8f0', opacity: 0.7 }} />
-                      <span style={{ color: '#6b7280' }}>{asset?.etf} Price</span>
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 22, height: 2, background: '#f97316' }} />
-                      <span style={{ color: '#6b7280' }}>CTA Z-Score (5w SMA)</span>
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 14, height: 10, background: 'rgba(239,68,68,0.25)', border: '1px solid rgba(239,68,68,0.5)', borderRadius: 2 }} />
-                      <span style={{ color: '#6b7280' }}>Net Long</span>
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 14, height: 10, background: 'rgba(34,197,94,0.25)', border: '1px solid rgba(34,197,94,0.5)', borderRadius: 2 }} />
-                      <span style={{ color: '#6b7280' }}>Net Short</span>
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ display: 'inline-block', width: 16, height: 2, borderTop: '2px dashed #ef4444' }} />
-                      <span style={{ color: '#6b7280' }}>±2σ</span>
-                    </span>
-                  </div>
-
                   <ResponsiveContainer width="100%" height={460}>
-                    <ComposedChart data={chartData} margin={{ top: 8, right: 58, left: 4, bottom: 4 }}>
+                    <ComposedChart data={chartData} margin={{ top: 36, right: 58, left: 4, bottom: 4 }}>
                       <defs>
                         {/*
-                          Domain is [-3.5, +3.5]. Zero sits exactly at 50% from top.
-                          Red fill above zero, green fill below zero.
+                          Domain [-3.5, +3.5]. Zero at 50% from top.
+                          GREEN above zero (net long = bullish positioning).
+                          RED below zero (net short = bearish positioning).
                         */}
                         <linearGradient id="zGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%"   stopColor="#ef4444" stopOpacity={0.55} />
-                          <stop offset="48%"  stopColor="#ef4444" stopOpacity={0.08} />
-                          <stop offset="50%"  stopColor="#22c55e" stopOpacity={0.08} />
-                          <stop offset="100%" stopColor="#22c55e" stopOpacity={0.55} />
+                          <stop offset="0%"   stopColor="#22c55e" stopOpacity={0.55} />
+                          <stop offset="48%"  stopColor="#22c55e" stopOpacity={0.08} />
+                          <stop offset="50%"  stopColor="#ef4444" stopOpacity={0.08} />
+                          <stop offset="100%" stopColor="#ef4444" stopOpacity={0.55} />
                         </linearGradient>
                       </defs>
 
@@ -260,7 +239,7 @@ export default function Home() {
                         label={{ value: '−2σ', position: 'insideRight', fill: '#ef4444', fontSize: 10, dx: 6 }} />
                       <ReferenceLine yAxisId="z" y={0} stroke="#1f2937" strokeWidth={1} />
 
-                      {/* ETF Price — thin white/neutral line */}
+                      {/* ETF Price */}
                       <Line
                         yAxisId="price"
                         type="monotone"
@@ -274,7 +253,7 @@ export default function Home() {
                         name={`${asset?.etf} Price`}
                       />
 
-                      {/* CTA Z-Score — prominent area with red/green gradient */}
+                      {/* CTA Z-Score area */}
                       <Area
                         yAxisId="z"
                         type="monotone"
@@ -290,6 +269,39 @@ export default function Home() {
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
+
+                  {/* ── Legend overlaid inside chart top-left ── */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 44,           /* sits just inside the chart plot area */
+                    left: 68,          /* clears the left Y-axis */
+                    display: 'flex',
+                    gap: 16,
+                    flexWrap: 'wrap',
+                    fontSize: 11,
+                    pointerEvents: 'none',
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 20, height: 2, background: '#e2e8f0', opacity: 0.7 }} />
+                      <span style={{ color: '#9ca3af' }}>{asset?.etf} Price</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 20, height: 2, background: '#f97316' }} />
+                      <span style={{ color: '#9ca3af' }}>CTA Z-Score (5w SMA)</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 12, height: 10, background: 'rgba(34,197,94,0.35)', border: '1px solid rgba(34,197,94,0.6)', borderRadius: 2 }} />
+                      <span style={{ color: '#9ca3af' }}>Net Long</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 12, height: 10, background: 'rgba(239,68,68,0.35)', border: '1px solid rgba(239,68,68,0.6)', borderRadius: 2 }} />
+                      <span style={{ color: '#9ca3af' }}>Net Short</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: '2px dashed #ef4444' }} />
+                      <span style={{ color: '#9ca3af' }}>±2σ</span>
+                    </span>
+                  </div>
                 </div>
 
                 {/* Signal legend */}
@@ -337,10 +349,10 @@ export default function Home() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
               {[
                 { color: '#e2e8f0', label: 'White line (left axis)',    text: 'ETF price for the selected asset' },
-                { color: '#f97316', label: 'Orange area (right axis)',  text: 'CTA positioning z-score (5-week smoothed)' },
-                { color: '#ef4444', label: 'Red fill above zero',       text: 'Net long positioning — forced selling risk on reversal' },
-                { color: '#22c55e', label: 'Green fill below zero',     text: 'Net short positioning — short-covering fuel on rally' },
-                { color: '#ef4444', label: '±2σ dashed lines',          text: 'Extreme positioning thresholds' },
+                { color: '#f97316', label: 'Orange line (right axis)',  text: 'CTA positioning z-score (5-week smoothed)' },
+                { color: '#22c55e', label: 'Green fill above zero',     text: 'CTAs net long — bullish positioning' },
+                { color: '#ef4444', label: 'Red fill below zero',       text: 'CTAs net short — bearish positioning' },
+                { color: '#ef4444', label: '±2σ dashed lines',          text: 'Extreme positioning thresholds — liquidation risk' },
                 { color: '#9ca3af', label: 'Divergence',                text: 'Price rising but CTAs not adding = weakening momentum' },
               ].map((item, i) => (
                 <div key={i} style={{ background: '#111827', borderRadius: 8, padding: 12 }}>
