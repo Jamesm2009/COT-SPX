@@ -21,6 +21,8 @@ const ACCENT = {
   usd: '#f472b6', gold: '#fcd34d', copper: '#fb923c', oil: '#94a3b8',
 };
 
+const CTA_SHIFT = 5; // weeks to shift CTA curve back (earlier) relative to price
+
 function formatDate(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
@@ -66,9 +68,15 @@ export default function Home() {
         if (p.error) {
           setError(p.error);
         } else {
-          const rows = (p.data || []).map(row => ({
+          // Shift CTA z-score 5 periods back (earlier) relative to price.
+          // At display position i, show the ctaZScore from i+5 in the original data.
+          // This makes the positioning signal appear 5 weeks earlier on the chart,
+          // helping visualise whether positioning leads subsequent price action.
+          const raw = p.data || [];
+          const rows = raw.map((row, i) => ({
             ...row,
-            price: row[assetDef?.etfKey] ?? row.etf_close ?? row.price ?? null,
+            price:      row[assetDef?.etfKey] ?? row.etf_close ?? row.price ?? null,
+            ctaZScore:  raw[i + CTA_SHIFT]?.ctaZScore ?? null,
           }));
           setChartData(rows);
           setMeta(p);
@@ -86,8 +94,8 @@ export default function Home() {
   const z            = latest?.ctaZScore ?? 0;
   const zColor       = Math.abs(z) > 2 ? '#ef4444' : Math.abs(z) > 1.5 ? '#f59e0b' : '#22c55e';
   const zLabel       = Math.abs(z) > 2 ? 'EXTREME' : Math.abs(z) > 1.5 ? 'ELEVATED' : 'NORMAL';
-  const extremeWeeks = chartData.filter(d => Math.abs(d.ctaZScore) > 2).length;
-  const maxZ         = chartData.length ? Math.max(...chartData.map(d => d.ctaZScore)) : 0;
+  const extremeWeeks = chartData.filter(d => Math.abs(d.ctaZScore ?? 0) > 2).length;
+  const maxZ         = chartData.length ? Math.max(...chartData.map(d => d.ctaZScore ?? 0)) : 0;
 
   const prices   = chartData.map(d => d.price).filter(Boolean);
   const minPrice = prices.length ? Math.min(...prices) * 0.95 : 'auto';
@@ -106,7 +114,7 @@ export default function Home() {
           <div>
             <h1 style={{ fontSize: 17, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>CTA Position Tracker</h1>
             <p style={{ color: '#4b5563', fontSize: 11, marginTop: 2 }}>
-              Managed Money · CFTC COT · 52-Week Z-Score · 5-Week SMA
+              Managed Money · CFTC COT · 52-Week Z-Score · 5-Week SMA · 5-Week Lead
             </p>
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
@@ -186,12 +194,6 @@ export default function Home() {
                   <ResponsiveContainer width="100%" height={460}>
                     <ComposedChart data={chartData} margin={{ top: 36, right: 58, left: 4, bottom: 4 }}>
                       <defs>
-                        {/*
-                          Domain [-3.5, +3.5]. Zero at 50% from top.
-                          GREEN above zero = net long (bullish).
-                          RED below zero   = net short (bearish).
-                          Higher opacity so fills are visible in daylight.
-                        */}
                         <linearGradient id="zGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%"   stopColor="#22c55e" stopOpacity={0.75} />
                           <stop offset="46%"  stopColor="#22c55e" stopOpacity={0.15} />
@@ -239,7 +241,6 @@ export default function Home() {
                         label={{ value: '−2σ', position: 'insideRight', fill: '#ef4444', fontSize: 10, dx: 6 }} />
                       <ReferenceLine yAxisId="z" y={0} stroke="#374151" strokeWidth={1} />
 
-                      {/* ETF Price — thin white line */}
                       <Line
                         yAxisId="price"
                         type="monotone"
@@ -253,7 +254,6 @@ export default function Home() {
                         name={`${asset?.etf} Price`}
                       />
 
-                      {/* CTA Z-Score — area with stronger green/red fill */}
                       <Area
                         yAxisId="z"
                         type="monotone"
@@ -270,7 +270,7 @@ export default function Home() {
                     </ComposedChart>
                   </ResponsiveContainer>
 
-                  {/* ── Legend overlaid inside chart top-left ── */}
+                  {/* Legend inside chart */}
                   <div style={{
                     position: 'absolute', top: 44, left: 68,
                     display: 'flex', gap: 16, flexWrap: 'wrap',
@@ -282,7 +282,7 @@ export default function Home() {
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ display: 'inline-block', width: 20, height: 2, background: '#f97316' }} />
-                      <span style={{ color: '#9ca3af' }}>CTA Z-Score (5w SMA)</span>
+                      <span style={{ color: '#9ca3af' }}>CTA Z-Score (5w SMA, 5w lead)</span>
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ display: 'inline-block', width: 12, height: 10, background: 'rgba(34,197,94,0.5)', border: '1px solid rgba(34,197,94,0.8)', borderRadius: 2 }} />
@@ -337,14 +337,15 @@ export default function Home() {
               Net positioning (longs minus shorts) is calculated as a percentage of total open interest each week.
               A <span style={{ color: '#e5e7eb' }}>52-week rolling z-score</span> normalizes the raw position data so you can identify
               historically extreme crowding regardless of changes in market size over time. A <span style={{ color: '#e5e7eb' }}>5-week simple
-              moving average</span> is then applied to reduce week-to-week noise while preserving the signal.
+              moving average</span> is then applied to reduce week-to-week noise, and the curve is then shifted <span style={{ color: '#e5e7eb' }}>5 weeks earlier</span> to
+              help visualise whether extreme positioning leads subsequent price action.
             </p>
 
             <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Reading the Chart</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
               {[
                 { color: '#e2e8f0', label: 'White line (left axis)',   text: 'ETF price for the selected asset' },
-                { color: '#f97316', label: 'Orange line (right axis)', text: 'CTA positioning z-score (5-week smoothed)' },
+                { color: '#f97316', label: 'Orange line (right axis)', text: 'CTA z-score smoothed (5w SMA), shown 5 weeks early' },
                 { color: '#22c55e', label: 'Green fill above zero',    text: 'CTAs net long — bullish positioning' },
                 { color: '#ef4444', label: 'Red fill below zero',      text: 'CTAs net short — bearish positioning' },
                 { color: '#ef4444', label: '±2σ dashed lines',         text: 'Extreme positioning thresholds — liquidation risk' },
