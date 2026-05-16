@@ -21,7 +21,7 @@ const ACCENT = {
   usd: '#f472b6', gold: '#fcd34d', copper: '#fb923c', oil: '#94a3b8',
 };
 
-const CTA_SHIFT = 5; // weeks to shift CTA curve back (earlier) relative to price
+const CTA_SHIFT = 5;
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
@@ -68,15 +68,11 @@ export default function Home() {
         if (p.error) {
           setError(p.error);
         } else {
-          // Shift CTA z-score 5 periods back (earlier) relative to price.
-          // At display position i, show the ctaZScore from i+5 in the original data.
-          // This makes the positioning signal appear 5 weeks earlier on the chart,
-          // helping visualise whether positioning leads subsequent price action.
           const raw = p.data || [];
           const rows = raw.map((row, i) => ({
             ...row,
-            price:      row[assetDef?.etfKey] ?? row.etf_close ?? row.price ?? null,
-            ctaZScore:  raw[i + CTA_SHIFT]?.ctaZScore ?? null,
+            price:     row[assetDef?.etfKey] ?? row.etf_close ?? row.price ?? null,
+            ctaZScore: raw[i + CTA_SHIFT]?.ctaZScore ?? null,
           }));
           setChartData(rows);
           setMeta(p);
@@ -102,7 +98,8 @@ export default function Home() {
   const maxPrice = prices.length ? Math.max(...prices) * 1.05 : 'auto';
 
   return (
-    <div style={{ background: '#030712', minHeight: '100vh', color: 'white', padding: '12px 16px' }}>
+    // ── PAGE: #030712 → #0d1117 (one shade lighter) ──
+    <div style={{ background: '#0d1117', minHeight: '100vh', color: 'white', padding: '12px 16px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
         {/* ── Compact header + tabs ── */}
@@ -113,7 +110,7 @@ export default function Home() {
         }}>
           <div>
             <h1 style={{ fontSize: 17, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>CTA Position Tracker</h1>
-            <p style={{ color: '#4b5563', fontSize: 11, marginTop: 2 }}>
+            <p style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>
               Managed Money · CFTC COT · 52-Week Z-Score · 5-Week SMA · 5-Week Lead
             </p>
           </div>
@@ -140,8 +137,8 @@ export default function Home() {
                 <button key={a.key} onClick={() => setSelectedAsset(a.key)} style={{
                   padding: '4px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                   borderRadius: 20,
-                  border: `1px solid ${selectedAsset === a.key ? ACCENT[a.key] : '#1f2937'}`,
-                  background: selectedAsset === a.key ? `${ACCENT[a.key]}22` : '#111827',
+                  border: `1px solid ${selectedAsset === a.key ? ACCENT[a.key] : '#374151'}`,
+                  background: selectedAsset === a.key ? `${ACCENT[a.key]}22` : '#1a2234',
                   color: selectedAsset === a.key ? ACCENT[a.key] : '#9ca3af',
                 }}>
                   {a.label}
@@ -164,27 +161,27 @@ export default function Home() {
 
             {!loading && !error && chartData.length > 0 && (
               <>
-                {/* Stat cards */}
+                {/* Stat cards — #0d1117 → #1a2234 */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
-                  <div style={{ background: '#0d1117', border: '1px solid #1f2937', borderRadius: 10, padding: '10px 14px' }}>
-                    <p style={{ color: '#4b5563', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>Current Z-Score</p>
+                  <div style={{ background: '#1a2234', border: '1px solid #243044', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>Current Z-Score</p>
                     <p style={{ color: zColor, fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{z > 0 ? '+' : ''}{z.toFixed(2)}σ</p>
                     <p style={{ color: zColor, fontSize: 10, marginTop: 3 }}>{zLabel}</p>
                   </div>
-                  <div style={{ background: '#0d1117', border: '1px solid #1f2937', borderRadius: 10, padding: '10px 14px' }}>
-                    <p style={{ color: '#4b5563', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>{asset?.etf} Price</p>
+                  <div style={{ background: '#1a2234', border: '1px solid #243044', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>{asset?.etf} Price</p>
                     <p style={{ color: accentColor, fontSize: 22, fontWeight: 700, lineHeight: 1 }}>${latest?.price?.toFixed(2) ?? '—'}</p>
-                    <p style={{ color: '#374151', fontSize: 10, marginTop: 3 }}>{latest?.date}</p>
+                    <p style={{ color: '#4b5563', fontSize: 10, marginTop: 3 }}>{latest?.date}</p>
                   </div>
-                  <div style={{ background: '#0d1117', border: '1px solid #1f2937', borderRadius: 10, padding: '10px 14px' }}>
-                    <p style={{ color: '#4b5563', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>3Y Max Long</p>
+                  <div style={{ background: '#1a2234', border: '1px solid #243044', borderRadius: 10, padding: '10px 14px' }}>
+                    <p style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase', marginBottom: 3 }}>3Y Max Long</p>
                     <p style={{ color: '#f97316', fontSize: 22, fontWeight: 700, lineHeight: 1 }}>+{maxZ.toFixed(2)}σ</p>
-                    <p style={{ color: '#374151', fontSize: 10, marginTop: 3 }}>{extremeWeeks} extreme weeks</p>
+                    <p style={{ color: '#4b5563', fontSize: 10, marginTop: 3 }}>{extremeWeeks} extreme weeks</p>
                   </div>
                 </div>
 
-                {/* ── Chart ── */}
-                <div style={{ position: 'relative', background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: '12px 8px 8px', marginBottom: 14 }}>
+                {/* ── Chart — #111827 → #162032 ── */}
+                <div style={{ position: 'relative', background: '#162032', border: '1px solid #243044', borderRadius: 12, padding: '12px 8px 8px', marginBottom: 14 }}>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 60, paddingRight: 60, marginBottom: 4 }}>
                     <p style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 13 }}>{asset?.label} · CTA Positioning</p>
@@ -202,11 +199,11 @@ export default function Home() {
                         </linearGradient>
                       </defs>
 
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#243044" />
 
                       <XAxis
                         dataKey="date"
-                        stroke="#1f2937"
+                        stroke="#243044"
                         tick={{ fill: '#6b7280', fontSize: 11 }}
                         tickFormatter={formatDate}
                         minTickGap={55}
@@ -215,7 +212,7 @@ export default function Home() {
                       <YAxis
                         yAxisId="price"
                         orientation="left"
-                        stroke="#1f2937"
+                        stroke="#243044"
                         tick={{ fill: '#9ca3af', fontSize: 11 }}
                         tickFormatter={v => `$${Math.round(v)}`}
                         domain={[minPrice, maxPrice]}
@@ -225,7 +222,7 @@ export default function Home() {
                       <YAxis
                         yAxisId="z"
                         orientation="right"
-                        stroke="#1f2937"
+                        stroke="#243044"
                         tick={{ fill: '#f97316', fontSize: 11 }}
                         tickFormatter={v => `${v > 0 ? '+' : ''}${v.toFixed(1)}σ`}
                         domain={[-3.5, 3.5]}
@@ -299,17 +296,17 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Signal legend */}
+                {/* Signal legend — #0d1117 → #1a2234 */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-                  <div style={{ background: '#0d1117', border: '1px solid #14532d', borderRadius: 10, padding: '10px 14px' }}>
+                  <div style={{ background: '#1a2234', border: '1px solid #14532d', borderRadius: 10, padding: '10px 14px' }}>
                     <p style={{ color: '#22c55e', fontWeight: 600, fontSize: 12, marginBottom: 3 }}>Normal · |Z| &lt; 1.5σ</p>
                     <p style={{ color: '#9ca3af', fontSize: 11 }}>Positioning balanced. No crowding risk.</p>
                   </div>
-                  <div style={{ background: '#0d1117', border: '1px solid #78350f', borderRadius: 10, padding: '10px 14px' }}>
+                  <div style={{ background: '#1a2234', border: '1px solid #78350f', borderRadius: 10, padding: '10px 14px' }}>
                     <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12, marginBottom: 3 }}>Elevated · 1.5σ – 2σ</p>
                     <p style={{ color: '#9ca3af', fontSize: 11 }}>Positioning stretched. Watch for exhaustion.</p>
                   </div>
-                  <div style={{ background: '#0d1117', border: '1px solid #7f1d1d', borderRadius: 10, padding: '10px 14px' }}>
+                  <div style={{ background: '#1a2234', border: '1px solid #7f1d1d', borderRadius: 10, padding: '10px 14px' }}>
                     <p style={{ color: '#ef4444', fontWeight: 600, fontSize: 12, marginBottom: 3 }}>Extreme · |Z| &gt; 2σ</p>
                     <p style={{ color: '#9ca3af', fontSize: 11 }}>Max long/short. High liquidation risk.</p>
                   </div>
@@ -319,9 +316,9 @@ export default function Home() {
           </>
         )}
 
-        {/* ── HOW TO USE ── */}
+        {/* ── HOW TO USE — #0c1220 → #111827 ── */}
         {activeTab === 'howto' && (
-          <div style={{ background: '#0c1220', border: '1px solid #1e3a5f', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+          <div style={{ background: '#111827', border: '1px solid #243044', borderRadius: 12, padding: 24, marginBottom: 24 }}>
             <p style={{ color: '#22d3ee', fontWeight: 700, fontSize: 15, marginBottom: 16 }}>How to Use This Dashboard</p>
 
             <p style={{ color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Data Source</p>
@@ -351,7 +348,7 @@ export default function Home() {
                 { color: '#ef4444', label: '±2σ dashed lines',         text: 'Extreme positioning thresholds — liquidation risk' },
                 { color: '#9ca3af', label: 'Divergence',               text: 'Price rising but CTAs not adding = weakening momentum' },
               ].map((item, i) => (
-                <div key={i} style={{ background: '#111827', borderRadius: 8, padding: 12 }}>
+                <div key={i} style={{ background: '#1a2234', borderRadius: 8, padding: 12 }}>
                   <p style={{ color: item.color, fontSize: 12, fontWeight: 600, marginBottom: 3 }}>{item.label}</p>
                   <p style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.5 }}>{item.text}</p>
                 </div>
@@ -370,17 +367,17 @@ export default function Home() {
                 { label: 'Copper',       detail: 'CFTC 085692', report: 'Disagg' },
                 { label: 'Oil (WTI)',    detail: 'CFTC 067651', report: 'Disagg' },
               ].map((item, i) => (
-                <div key={i} style={{ background: '#111827', borderRadius: 8, padding: 10 }}>
+                <div key={i} style={{ background: '#1a2234', borderRadius: 8, padding: 10 }}>
                   <p style={{ color: '#e5e7eb', fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{item.label}</p>
                   <p style={{ color: '#6b7280', fontSize: 11 }}>{item.detail}</p>
-                  <p style={{ color: '#374151', fontSize: 10 }}>{item.report} Report</p>
+                  <p style={{ color: '#4b5563', fontSize: 10 }}>{item.report} Report</p>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        <p style={{ color: '#374151', fontSize: 11, textAlign: 'center', paddingBottom: 16 }}>
+        <p style={{ color: '#4b5563', fontSize: 11, textAlign: 'center', paddingBottom: 16 }}>
           For informational purposes only · Not investment advice · COT data reflects Tuesday positions published Friday
         </p>
       </div>
